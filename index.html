@@ -504,6 +504,7 @@
         <div style="margin-top:4px;">対応形式:mp4 / mov / avi / mkv　最大2GBまで</div>
         <div id="filePillWrap"></div>
       </div>
+      <div class="hint" style="margin-top:6px;">⚠ アップロードした動画は、解析のためGoogleのGemini APIに送信されます。他のプレイヤーの表示名・ボイスチャット・立ち回り等が映り込む場合は、本人の同意なくGoogleへ送信されることになる点にご注意ください。可能であればリプレイ機能で撮影した、自分視点のみが映る動画の利用を推奨します。</div>
       <input type="file" id="fileInput" accept="video/*" style="display:none;">
     </div>
   </div>
@@ -513,7 +514,8 @@
 <div class="modal-backdrop" id="settingsModal">
   <div class="modal">
     <h3>API / モデル設定</h3>
-    <p class="desc">このシステムはブラウザから直接 Google Gemini API を呼び出します。APIキーはこの端末のブラウザ内(localStorage)にのみ保存され、外部サーバーには送信されません。ご自身の Google AI Studio で発行したAPIキーを入力してください。</p>
+    <p class="desc">このシステムはブラウザから直接 Google Gemini API を呼び出します。APIキーはこの端末のブラウザ内(localStorage)に平文で保存され、外部サーバーには送信されません。ご自身の Google AI Studio で発行したAPIキーを入力してください。</p>
+    <div class="notice">⚠ APIキーは暗号化されずにこのブラウザ内に保存されます。共有PC・共用端末で利用した場合は、使い終わったら下の「保存済みのAPIキーを削除」から必ず削除してください。またAPIキー自体が第三者に渡らないよう、スクリーンショットやURLの共有時にも映り込みにご注意ください。</div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
       <button class="btn btn-ghost" id="apiGuideGeminiBtn" type="button" style="flex:1;justify-content:center;">📄 Geminiキーの取得方法</button>
       <button class="btn btn-ghost" id="apiGuideYoutubeBtn" type="button" style="flex:1;justify-content:center;">📄 YouTubeキーの取得方法</button>
@@ -553,9 +555,12 @@
       <button class="btn btn-ghost" id="testConnBtn" type="button" style="width:100%;justify-content:center;">🔧 接続テスト(最小のリクエストを1回送信)</button>
       <div id="testConnResult" class="hint" style="margin-top:8px;white-space:pre-wrap;"></div>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="settingsCancelBtn">閉じる</button>
-      <button class="btn btn-primary" id="settingsSaveBtn">保存</button>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-ghost" id="clearKeysBtn" type="button" style="color:var(--red,#e05252);">🗑 保存済みのAPIキーを削除</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" id="settingsCancelBtn">閉じる</button>
+        <button class="btn btn-primary" id="settingsSaveBtn">保存</button>
+      </div>
     </div>
   </div>
 </div>
@@ -573,7 +578,7 @@
       <li>出力後は下部の入力欄から追加質問ができます。</li>
       <li>処理中に右上の「■ 中止」を押すと、AIコーチングの処理をその場で中断できます。</li>
     </ol>
-    <div class="notice" style="margin-top:14px;">本ツールはBlizzard Entertainment公式とは無関係の、個人が作成した非公式ファンメイドツールです。</div>
+    <div class="notice" style="margin-top:14px;">本ツールはBlizzard Entertainment公式とは無関係の、個人が作成した非公式ファンメイドツールです。<br>AIによるコーチング内容はあくまで目安であり、正確性・妥当性を保証するものではありません。本ツールの利用は自己責任でお願いします。<br>アップロードした動画は解析のためGoogleのGemini APIに送信されます。他のプレイヤーの表示名・ボイスチャット等が映り込む動画を利用する場合は、その点をご理解のうえご利用ください。<br>APIキーはこの端末のブラウザ内に平文で保存されます。共有PCでは利用後に⚙から削除してください。</div>
   </div>
 </div>
 
@@ -859,6 +864,20 @@ document.getElementById('settingsSaveBtn').addEventListener('click', ()=>{
   }catch(e){ /* localStorage unavailable - ignore, key stays in-memory only */ }
   settingsModal.classList.remove('show');
 });
+document.getElementById('clearKeysBtn').addEventListener('click', ()=>{
+  state.apiKey = '';
+  state.youtubeApiKey = '';
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('youtubeApiKeyInput').value = '';
+  try{
+    localStorage.removeItem('owaic_api_key');
+    localStorage.removeItem('owaic_youtube_api_key');
+  }catch(e){ /* localStorage unavailable - ignore */ }
+  const btn = document.getElementById('clearKeysBtn');
+  const original = btn.textContent;
+  btn.textContent = '✓ 削除しました';
+  setTimeout(()=>{ btn.textContent = original; }, 1800);
+});
 
 // 接続テスト: 保存前でも、入力中のAPIキー/モデルで最小のリクエストを1回だけ送って切り分けできるようにする
 document.getElementById('testConnBtn').addEventListener('click', async ()=>{
@@ -909,6 +928,10 @@ document.getElementById('testConnBtn').addEventListener('click', async ()=>{
 });
 
 // 提供終了・退役済みのモデルID(既存ユーザーのlocalStorageに残っている場合は無視して現行モデルにフォールバックする)
+// 保守メモ: このリストと、上の<select id="modelSelect">の選択肢・OVERLOAD_FALLBACK_MODELSは手動管理。
+// Geminiのモデル世代は短いサイクルで入れ替わる(gemini-1.5-* → 2.x → 3.x 等)ため、
+// 新モデルの追加・廃止モデルのRETIRED_MODELSへの追加は定期的に
+// https://ai.google.dev/gemini-api/docs/models で最新の提供状況を確認して見直すこと。
 const RETIRED_MODELS = ['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash','gemini-2.0-flash-001','gemini-2.0-flash-lite','gemini-1.5-flash','gemini-1.5-pro','gemini-1.5-flash-8b','gemini-pro'];
 try{
   const savedKey = localStorage.getItem('owaic_api_key');
@@ -1364,11 +1387,18 @@ addEntry({role:'ai', text:'こんにちは!設定を入力し、動画をアッ�
 
 /* =========================================================
    Gemini SDK 読み込み(遅延)
+   セキュリティ上の理由でバージョンを固定している(サプライチェーン対策)。
+   固定URLの末尾の @x.y.z を最新版に上げる際は、必ず変更内容を確認してから更新すること。
+   参考: https://www.npmjs.com/package/@google/genai?activeTab=versions
+   (注: 動的import()にはブラウザ標準のSRI(integrity属性)の仕組みが存在せず、
+   esm.sh配信物は内部で複数ファイルに分かれて解決されるため、単一ハッシュでの
+   完全な整合性検証は現実的でない。バージョン固定を主な対策としている)
 ========================================================= */
+const GEMINI_SDK_VERSION = '2.22.0';
 let GoogleGenAI, Type, aiClient;
 async function ensureSDK(){
   if(GoogleGenAI) return;
-  const mod = await import('https://esm.sh/@google/genai');
+  const mod = await import(`https://esm.sh/@google/genai@${GEMINI_SDK_VERSION}`);
   GoogleGenAI = mod.GoogleGenAI;
   Type = mod.Type;
 }
