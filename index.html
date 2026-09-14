@@ -360,7 +360,7 @@
       <h2 id="coachingSettingsHeader" style="cursor:pointer;user-select:none;">コーチング設定<span class="accordion-chevron" id="coachingSettingsChevron">▾</span></h2>
       <div class="accordion-body" id="coachingSettingsBody">
       <div class="accordion-body-inner">
-      <div class="notice" style="margin-bottom:14px;">※本AIコーチングシステムはブロンズ〜プラチナまでを対象に作っております。そのためダイヤモンド以降のランクでは、求めている結果は得られない可能性があります。</div>
+      <div class="notice" style="margin-bottom:14px;">※本AIコーチングシステムはブロンズ〜エメラルドまでを対象に作っております。そのためダイヤモンド以降のランクでは、求めている結果は得られない可能性があります。</div>
       <div class="field-grid three">
         <div class="field">
           <label>ランク帯</label>
@@ -521,6 +521,30 @@
       <button class="btn btn-ghost" id="apiGuideYoutubeBtn" type="button" style="flex:1;justify-content:center;">📄 YouTubeキーの取得方法</button>
     </div>
     <div class="field">
+      <label>この端末の利用形態</label>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer;">
+          <input type="radio" name="pcType" id="pcTypePersonal" value="personal"> 個人のパソコン(自分専用)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer;">
+          <input type="radio" name="pcType" id="pcTypeShared" value="shared"> 共有パソコン(他の人も使う)
+        </label>
+      </div>
+      <div class="hint">「共有パソコン」を選ぶと、このページを閉じようとした際にAPIキーが削除されているか確認し、削除されていない場合は警告を表示します。</div>
+    </div>
+    <div class="field">
+      <label>非操作時の自動削除</label>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer;">
+          <input type="radio" name="autoDelete" id="autoDeleteOff" value="off"> 自動削除しない
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer;">
+          <input type="radio" name="autoDelete" id="autoDeleteOn" value="on"> 有効にする(30分操作がなければ自動削除)
+        </label>
+      </div>
+      <div class="hint">有効にすると、30分間このアプリの操作(クリック・キー入力など)がなかった場合、安全のためGemini・YouTube両方のAPIキーを自動的に削除します。</div>
+    </div>
+    <div class="field">
       <label>Gemini API キー</label>
       <div class="keyrow">
         <input type="password" id="apiKeyInput" placeholder="AIza...">
@@ -561,6 +585,18 @@
         <button class="btn btn-ghost" id="settingsCancelBtn">閉じる</button>
         <button class="btn btn-primary" id="settingsSaveBtn">保存</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 共有パソコン向け: APIキー未削除の警告モーダル -->
+<div class="modal-backdrop" id="sharedPcWarningModal">
+  <div class="modal">
+    <h3>⚠ APIキーが残っています</h3>
+    <p class="desc">APIキーの削除がされていません。安全性のため共有パソコンのAPIキーを削除してください。</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="sharedPcWarningCloseBtn">後で削除する</button>
+      <button class="btn btn-primary" id="sharedPcWarningDeleteBtn">今すぐAPIキーを削除する</button>
     </div>
   </div>
 </div>
@@ -705,8 +741,8 @@ function buildRankOptions(){
   return out;
 }
 
-// ランク帯の文字列(例: "ブロンズ3")が、ブロンズ〜プラチナの範囲に含まれるかを判定する
-const SCORING_TARGET_TIERS = ['ブロンズ','シルバー','ゴールド','プラチナ'];
+// ランク帯の文字列(例: "ブロンズ3")が、ブロンズ〜エメラルドの範囲に含まれるかを判定する
+const SCORING_TARGET_TIERS = ['ブロンズ','シルバー','ゴールド','プラチナ','エメラルド'];
 function isScoringTargetRank(rankStr){
   const s = String(rankStr || '').trim();
   return SCORING_TARGET_TIERS.some(t => s.startsWith(t));
@@ -715,13 +751,13 @@ function isScoringTargetRank(rankStr){
 // 10点満点評価で使用可能な得点(0〜4は整数のみ、4.5〜10は0.5刻み)
 const SCORE_ALLOWED_VALUES = ['0','1','2','3','4','4.5','5','5.5','6','6.5','7','7.5','8','8.5','9','9.5','10'];
 
-// ブロンズ〜プラチナ帯のコーチングでのみ使用する採点ルール(バックグラウンド管理)
+// ブロンズ〜エメラルド帯のコーチングでのみ使用する採点ルール(バックグラウンド管理)
 const SCORING_RUBRIC_TEXT =
-`[採点ルール](ブロンズ〜プラチナ帯のプレイヤーに対してのみ適用すること)
-このプレイヤーのランク帯はブロンズ〜プラチナの範囲内です。今回分析した範囲のプレイ内容全体を、10点満点で採点してください。
+`[採点ルール](ブロンズ〜エメラルド帯のプレイヤーに対してのみ適用すること)
+このプレイヤーのランク帯はブロンズ〜エメラルドの範囲内です。今回分析した範囲のプレイ内容全体を、10点満点で採点してください。
 ・使用できる得点は次の値のみです: ${SCORE_ALLOWED_VALUES.join(', ')}(0〜4は整数のみ、4.5〜10は0.5刻みで使用可能)
 ・採点の観点は、上記の「コーチング方針」および「AIの最終判断ロジック」「AIコーチングの基本原則」に基づき、意思決定・ポジショニング/リスク管理・試合全体への貢献度を総合的に評価すること
-・ブロンズ〜プラチナ帯の基準(まだ習熟段階であることを踏まえた基準)で採点し、プロ基準で厳しく採点しすぎないこと
+・ブロンズ〜エメラルド帯の基準(まだ習熟段階であることを踏まえた基準)で採点し、プロ基準で厳しく採点しすぎないこと
 ・score(採点結果)とscoreReason(その点数にした理由と、次のランクに上がるために特に改善すべき点)を必ず出力すること`;
 
 /* =========================================================
@@ -731,6 +767,8 @@ const state = {
   apiKey: '',
   model: 'gemini-3.7-flash',
   youtubeApiKey: '',
+  pcType: 'personal',          // 'personal' | 'shared' - 共有パソコン向けの終了時チェックに使用
+  autoDeleteEnabled: false,    // 非操作時にAPIキーを自動削除するか
   videoFile: null,
   videoDuration: 0,
   uploadedGeminiFile: null,   // {name, uri, mimeType, state}
@@ -835,6 +873,8 @@ document.getElementById('settingsBtn').addEventListener('click', ()=>{
     document.getElementById('customModelInput').value = state.model;
   }
   document.getElementById('youtubeApiKeyInput').value = state.youtubeApiKey;
+  document.getElementById(state.pcType === 'shared' ? 'pcTypeShared' : 'pcTypePersonal').checked = true;
+  document.getElementById(state.autoDeleteEnabled ? 'autoDeleteOn' : 'autoDeleteOff').checked = true;
   settingsModal.classList.add('show');
 });
 document.getElementById('settingsCancelBtn').addEventListener('click', ()=> settingsModal.classList.remove('show'));
@@ -857,27 +897,88 @@ document.getElementById('settingsSaveBtn').addEventListener('click', ()=>{
   state.apiKey = key;
   state.model = (sel === '__custom__' && custom) ? custom : sel;
   state.youtubeApiKey = document.getElementById('youtubeApiKeyInput').value.trim();
+  state.pcType = document.getElementById('pcTypeShared').checked ? 'shared' : 'personal';
+  state.autoDeleteEnabled = document.getElementById('autoDeleteOn').checked;
   try{
     localStorage.setItem('owaic_api_key', state.apiKey);
     localStorage.setItem('owaic_model', state.model);
     localStorage.setItem('owaic_youtube_api_key', state.youtubeApiKey);
+    localStorage.setItem('owaic_pc_type', state.pcType);
+    localStorage.setItem('owaic_auto_delete', state.autoDeleteEnabled ? 'on' : 'off');
   }catch(e){ /* localStorage unavailable - ignore, key stays in-memory only */ }
+  resetAutoDeleteTimer();
   settingsModal.classList.remove('show');
 });
-document.getElementById('clearKeysBtn').addEventListener('click', ()=>{
+
+// APIキーを削除する共通処理(⚙の削除ボタン・自動削除タイマー・共有パソコン警告モーダルから共通で呼び出す)
+function clearApiKeys(){
   state.apiKey = '';
   state.youtubeApiKey = '';
-  document.getElementById('apiKeyInput').value = '';
-  document.getElementById('youtubeApiKeyInput').value = '';
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const youtubeApiKeyInput = document.getElementById('youtubeApiKeyInput');
+  if(apiKeyInput) apiKeyInput.value = '';
+  if(youtubeApiKeyInput) youtubeApiKeyInput.value = '';
   try{
     localStorage.removeItem('owaic_api_key');
     localStorage.removeItem('owaic_youtube_api_key');
   }catch(e){ /* localStorage unavailable - ignore */ }
+}
+document.getElementById('clearKeysBtn').addEventListener('click', ()=>{
+  clearApiKeys();
   const btn = document.getElementById('clearKeysBtn');
   const original = btn.textContent;
   btn.textContent = '✓ 削除しました';
   setTimeout(()=>{ btn.textContent = original; }, 1800);
 });
+
+/* =========================================================
+   共有パソコン向け: 終了時のAPIキー削除確認
+   「共有パソコン」設定時、ページを閉じようとしたときにAPIキーが
+   残っていれば、ブラウザ標準の離脱確認ダイアログを出す。
+   ユーザーがそこで「キャンセル(このページに留まる)」を選んだ場合のみ
+   (=ページがまだ生きている場合のみ)、setTimeoutのコールバックが実行され、
+   独自の警告モーダルで具体的な案内を表示する。
+   (ブラウザ標準の離脱ダイアログはセキュリティ上の理由で文言を独自にカスタマイズできないため)
+========================================================= */
+const sharedPcWarningModal = document.getElementById('sharedPcWarningModal');
+window.addEventListener('beforeunload', (e)=>{
+  if(state.pcType === 'shared' && (state.apiKey || state.youtubeApiKey)){
+    e.preventDefault();
+    e.returnValue = 'APIキーの削除がされていません。安全性のため共有パソコンのAPIキーを削除してください。';
+    setTimeout(()=>{ sharedPcWarningModal.classList.add('show'); }, 50);
+    return e.returnValue;
+  }
+});
+document.getElementById('sharedPcWarningCloseBtn').addEventListener('click', ()=>{
+  sharedPcWarningModal.classList.remove('show');
+});
+document.getElementById('sharedPcWarningDeleteBtn').addEventListener('click', ()=>{
+  clearApiKeys();
+  sharedPcWarningModal.classList.remove('show');
+});
+
+/* =========================================================
+   非操作時の自動APIキー削除(30分)
+   「自動削除」を有効にしている場合、クリック・キー入力等の操作が
+   30分間なければ、安全のためAPIキーを自動的に削除する。
+========================================================= */
+const AUTO_DELETE_TIMEOUT_MS = 30 * 60 * 1000;
+let autoDeleteTimer = null;
+function performAutoDelete(){
+  if(!state.apiKey && !state.youtubeApiKey) return; // 削除するキーが無ければ何もしない
+  clearApiKeys();
+  addEntry({role:'ai', text:'⚠ 30分間操作がなかったため、安全のためGemini・YouTube両方のAPIキーを自動的に削除しました。引き続きご利用になる場合は、⚙から再度APIキーを入力してください。'});
+}
+function resetAutoDeleteTimer(){
+  if(autoDeleteTimer){ clearTimeout(autoDeleteTimer); autoDeleteTimer = null; }
+  if(state.autoDeleteEnabled){
+    autoDeleteTimer = setTimeout(performAutoDelete, AUTO_DELETE_TIMEOUT_MS);
+  }
+}
+['click','keydown','touchstart'].forEach(evt=>{
+  window.addEventListener(evt, ()=>{ if(state.autoDeleteEnabled) resetAutoDeleteTimer(); }, {passive:true});
+});
+resetAutoDeleteTimer();
 
 // 接続テスト: 保存前でも、入力中のAPIキー/モデルで最小のリクエストを1回だけ送って切り分けできるようにする
 document.getElementById('testConnBtn').addEventListener('click', async ()=>{
@@ -944,6 +1045,10 @@ try{
   if(savedModel) state.model = savedModel;
   const savedYoutubeKey = localStorage.getItem('owaic_youtube_api_key');
   if(savedYoutubeKey) state.youtubeApiKey = savedYoutubeKey;
+  const savedPcType = localStorage.getItem('owaic_pc_type');
+  if(savedPcType === 'shared' || savedPcType === 'personal') state.pcType = savedPcType;
+  const savedAutoDelete = localStorage.getItem('owaic_auto_delete');
+  if(savedAutoDelete === 'on') state.autoDeleteEnabled = true;
 }catch(e){}
 
 const helpModal = document.getElementById('helpModal');
