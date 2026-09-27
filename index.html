@@ -1819,7 +1819,7 @@ async function runResearch(settings, onStatus){
   let noVideoReason = '';
   if(state.youtubeApiKey){
     // YouTube Data APIで実際の動画を検索する
-    const query = `Overwatch2 ${settings.map} ${heroesText} ${settings.role} 立ち回り 攻略`;
+    const query = `Overwatch ${settings.map} ${heroesText} 立ち回り 攻略`;
     onStatus && onStatus('YouTubeで関連動画を検索しています…');
     let videos = [];
     try{
