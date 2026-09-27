@@ -1541,6 +1541,9 @@ function formatApiError(err){
   if(isServiceOverloadedError(err)){
     return '【AIモデルが混雑しています】\nGeminiのモデル側でアクセスが集中しており、一時的に処理できない状態です(503 / UNAVAILABLE)。APIキーやこのアプリの設定の問題ではなく、Google側のサーバー負荷による一時的な現象です。このアプリは最大8回・合計で数分間(最長6分程度)、間隔を空けながら自動的に再試行し、それでも解消しない場合は別の軽量モデル(gemini-3.5-flash→gemini-3.1-flash-lite)へ自動的に切り替えて再試行しますが、それでも解消しませんでした(候補のモデルすべてで混雑している可能性があります)。\n\n次をお試しください:\n・5〜10分ほど時間をおいてから「AIコーチング開始」をもう一度お試しください\n・⚙で他のモデルに切り替えて試す(既に自動で試した以外のモデルも含めて)\n・分析範囲を短くすると、1回のリクエストが軽くなり成功しやすくなる場合があります\n\n詳細: '+raw;
   }
+  if(isFileAccessError(err)){
+    return '【アップロード済みの動画への参照が無効になっています】\n以前アップロードした動画ファイルに、Gemini側からアクセスできなくなりました(403 / PERMISSION_DENIED)。動画データ自体が壊れているわけではなく、主に以下のいずれかが原因です。\n\n・アップロードから時間が経ち、Gemini側で動画ファイルの保存期限(アップロードから約48時間)が切れた\n・アップロード後に⚙でGemini APIキーを変更した(アップロード時とは別のAPIキー/プロジェクトになっている)\n\nこのアプリ側で、無効になった動画の参照は自動的に破棄しました。もう一度「AIコーチング開始」を押すと、動画を最初から再アップロードして解析します(お手数ですが、動画ファイルの選択自体はやり直す必要はありません)。\n\n詳細: '+raw;
+  }
   const isModelIssue = /is no longer available|NOT_FOUND|not found for API version|not supported for generateContent/i.test(raw);
   if(isModelIssue){
     return '指定したモデルが利用できません(廃止/未提供の可能性があります)。右上の⚙から使用モデルを現行のもの(例: gemini-3.7-flash)に変更してから再度お試しください。\n詳細: '+raw;
@@ -1607,6 +1610,14 @@ function parseServiceDisabledDetails(err){
     if(urlMatch) activationUrl = urlMatch[0];
   }
   return { activationUrl };
+}
+// 以前アップロードしたGeminiの動画ファイル(Files API)に、後からアクセスできなくなった場合(403 / PERMISSION_DENIED)かどうかを判定。
+// 主な原因は、アップロードから約48時間経過してファイルの保存期限が切れた、またはアップロード後にAPIキー(プロジェクト)を変更したこと。
+// このアプリはアップロード済みファイルの参照をstate.uploadedGeminiFileにキャッシュして使い回すため、
+// この状態を検知して破棄しないと、以後ずっと同じ無効な参照を使い続けて失敗し続けてしまう。
+function isFileAccessError(err){
+  const msg = (err && err.message) ? err.message : String(err);
+  return /PERMISSION_DENIED/i.test(msg) && /permission to access the file|file .*(may not exist|not found)/i.test(msg);
 }
 // 429の中でも「1分あたり」ではなく「1日あたり」の無料枠上限に達したケースかどうかを判定する。
 // (このケースは時間を少し置いても解消しないため、通常の429と区別してリトライ方針・案内文を変える)
@@ -2154,6 +2165,11 @@ startBtn.addEventListener('click', async ()=>{
       addEntry({role:'error', text:'AIコーチングを中止しました。'});
     } else {
       console.error(err);
+      if(isFileAccessError(err)){
+        // キャッシュしている動画ファイルの参照が無効になっているため、次回は再アップロードから
+        // やり直せるように破棄しておく(破棄しないと毎回同じエラーで失敗し続けてしまう)
+        state.uploadedGeminiFile = null;
+      }
       addEntry({role:'error', text: formatApiError(err)});
     }
   }finally{
