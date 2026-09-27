@@ -1814,6 +1814,9 @@ async function runResearch(settings, onStatus){
 使用キャラクター: ${heroesText}
 コーチング方針: ${settings.coachingFocus}`;
 
+  // YouTube検索を試みたが実際の動画を参照できなかった場合の理由(あとで研究結果の末尾に注記するため)。
+  // これが空文字のまま最後まで残るのは「YouTube Data APIキーが未設定」の場合のみ。
+  let noVideoReason = '';
   if(state.youtubeApiKey){
     // YouTube Data APIで実際の動画を検索する
     const query = `Overwatch2 ${settings.map} ${heroesText} ${settings.role} 立ち回り 攻略`;
@@ -1824,7 +1827,11 @@ async function runResearch(settings, onStatus){
     }catch(err){
       console.error('YouTube search failed:', err);
       onStatus && onStatus('YouTube検索に失敗したため、AIの一般知識のみで情報をまとめます(詳細: '+(err.message||err)+')…');
+      noVideoReason = 'YouTube検索でエラーが発生したため(詳細: '+(err.message||err)+')、';
       videos = [];
+    }
+    if(!videos.length && !noVideoReason){
+      noVideoReason = '条件に関連する動画がYouTube検索で見つからなかったため、';
     }
 
     if(videos.length){
@@ -1923,7 +1930,12 @@ ${baseConditionText}
     contents: [{ role:'user', parts:[{text: fallbackPrompt}] }],
     config: { abortSignal: sig }
   }), onStatus, { allowModelFallback: true });
-  const suffix = state.youtubeApiKey ? '' : '\n\n※YouTube Data APIキーが未設定のため、この情報はAIの一般知識のみをもとに作成されています。⚙で設定すると実際のYouTube検索結果を反映できます。';
+  let suffix = '';
+  if(!state.youtubeApiKey){
+    suffix = '\n\n※YouTube Data APIキーが未設定のため、この情報はAIの一般知識のみをもとに作成されています。⚙で設定すると実際のYouTube検索結果を反映できます。';
+  } else if(noVideoReason){
+    suffix = '\n\n※'+noVideoReason+'この情報はAIの一般知識のみをもとに作成されています(実際の動画の視聴・参考動画の提示はできていません)。YouTube Data APIの1日あたりの無料枠を使い切っている場合は、時間を置くと解消することがあります。';
+  }
   return (res2.text || '') + suffix;
 }
 
